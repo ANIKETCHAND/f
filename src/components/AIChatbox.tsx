@@ -339,10 +339,6 @@ export function AIChatbox() {
               </div>
               <div className="ai-header-info">
                 <h3>Aniket - you personal assistant</h3>
-                <p>
-                  <span className="live-dot" />
-                  Online • Powered by Gemini AI
-                </p>
               </div>
             </div>
 
