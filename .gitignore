@@ -1,0 +1,9 @@
+node_modules
+dist
+.vite
+*.log
+.DS_Store
+.vercel
+*.zip
+pasted_file_*
+face-*.jpg
