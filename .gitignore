@@ -4,6 +4,8 @@ dist
 *.log
 .DS_Store
 .vercel
+.env
+.env.*
 *.zip
 pasted_file_*
 face-*.jpg
