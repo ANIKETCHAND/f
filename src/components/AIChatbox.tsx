@@ -4,8 +4,6 @@ import {
   X,
   Send,
   Sparkles,
-  Key,
-  Trash2,
   ExternalLink,
   Bot,
   Check,
@@ -159,7 +157,6 @@ export function AIChatbox() {
   })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const [apiKey, setApiKey] = useState(() => {
     return (
       localStorage.getItem('forever-us-gemini-key') ||
@@ -167,7 +164,6 @@ export function AIChatbox() {
       DEFAULT_GEMINI_KEY
     )
   })
-  const [tempKey, setTempKey] = useState('')
   const [activeModel, setActiveModel] = useState<string>('gemini-3.7-flash')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -278,30 +274,7 @@ export function AIChatbox() {
     }
   }
 
-  function handleSaveKey(e: React.FormEvent) {
-    e.preventDefault()
-    const cleaned = tempKey.trim()
-    if (cleaned) {
-      setApiKey(cleaned)
-      localStorage.setItem('forever-us-gemini-key', cleaned)
-    } else {
-      setApiKey(DEFAULT_GEMINI_KEY)
-      localStorage.removeItem('forever-us-gemini-key')
-    }
-    setShowSettings(false)
-  }
 
-  function handleResetDefaultKey() {
-    setApiKey(DEFAULT_GEMINI_KEY)
-    localStorage.removeItem('forever-us-gemini-key')
-    setTempKey('')
-    setShowSettings(false)
-  }
-
-  function clearHistory() {
-    setMessages([DEFAULT_WELCOME])
-    localStorage.removeItem('forever-us-ai-chat')
-  }
 
   return (
     <>
@@ -345,24 +318,6 @@ export function AIChatbox() {
             <div className="ai-header-actions">
               <button
                 type="button"
-                className="ai-icon-btn"
-                onClick={() => setShowSettings(!showSettings)}
-                title="API Key Settings"
-                aria-label="Settings"
-              >
-                <Key size={16} />
-              </button>
-              <button
-                type="button"
-                className="ai-icon-btn"
-                onClick={clearHistory}
-                title="Clear conversation"
-                aria-label="Clear chat"
-              >
-                <Trash2 size={16} />
-              </button>
-              <button
-                type="button"
                 className="ai-icon-btn close-btn"
                 onClick={() => setIsOpen(false)}
                 title="Close chat"
@@ -372,39 +327,6 @@ export function AIChatbox() {
               </button>
             </div>
           </div>
-
-          {/* Settings Drawer (API Key configuration) */}
-          {showSettings && (
-            <div className="ai-settings-panel">
-              <div className="ai-settings-content">
-                <h4>Gemini AI Configuration</h4>
-                <p>
-                  Official Gemini API key is already configured and active. You can enter a custom key or reset to default anytime.
-                </p>
-                <form onSubmit={handleSaveKey}>
-                  <input
-                    type="password"
-                    placeholder="Enter custom Gemini API key..."
-                    value={tempKey}
-                    onChange={(e) => setTempKey(e.target.value)}
-                  />
-                  <div className="settings-actions">
-                    <button type="submit" className="button button-dark">Save Custom Key</button>
-                    <button
-                      type="button"
-                      className="button button-outline"
-                      onClick={handleResetDefaultKey}
-                    >
-                      Use Default Key
-                    </button>
-                  </div>
-                </form>
-                <p className="key-active-note">
-                  ✓ Active Key: {apiKey.slice(0, 6)}...{apiKey.slice(-4)} ({activeModel})
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Messages Feed */}
           <div className="ai-messages-feed">
