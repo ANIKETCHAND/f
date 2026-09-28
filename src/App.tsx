@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { HyperText } from '@/components/ui/hyper-text'
 import { TextReveal } from '@/components/ui/cascade-text'
+import { AIChatbox } from '@/components/AIChatbox'
 import {
   ArrowUpRight,
   Check,
@@ -606,6 +607,7 @@ function App() {
       </main>
 
       {showForm && <div className="modal-backdrop" onClick={() => setShowForm(false)}><div className="memory-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowForm(false)} aria-label="Close"><X /></button><p className="eyebrow">add to the archive</p><h2>What should we<br /><em>remember?</em></h2><form onSubmit={submitMemory}><div className="form-row"><label>Memory title<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="The night we…" /></label><label>Date / year<input required value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} placeholder="DEC 2024" /></label></div><label>Who was there?<input required value={form.people} onChange={(event) => setForm({ ...form, people: event.target.value })} placeholder="ALL OF US" /></label><label>Tell the tiny story<textarea required value={form.caption} onChange={(event) => setForm({ ...form, caption: event.target.value })} placeholder="The part we will still be laughing about…" rows={3} /></label><label>Photo or video URL <span className="optional">optional</span><input value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} placeholder="https://…" /></label><button className="button button-dark form-submit" type="submit">Save this one <Heart size={16} fill="currentColor" /></button><p className="form-hint">Your memory stays in this browser — no account, no fuss.</p></form></div></div>}
+      <AIChatbox />
     </div>
   )
 }
