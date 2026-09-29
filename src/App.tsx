@@ -586,7 +586,7 @@ function App() {
 
               <div className="letter-signoff">
                 <p>With all my heart and infinite gratitude,</p>
-                <h3>Forever your bestie, <em>Aniket</em> ♡</h3>
+                <h3>Forever your Homeboy, <em>Aniket</em> ♡</h3>
               </div>
             </div>
 
