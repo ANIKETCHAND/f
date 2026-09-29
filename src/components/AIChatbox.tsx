@@ -25,11 +25,11 @@ const DEFAULT_GEMINI_KEY = (() => {
 })()
 
 const CANDIDATE_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-3.1-flash-lite',
   'gemini-3.7-flash',
   'gemini-3.6-flash',
-  'gemini-3.8-flash',
-  'gemini-3.1-flash-lite',
-  'gemini-flash-lite-latest',
 ]
 
 function getFriendshipStats() {
@@ -164,7 +164,7 @@ export function AIChatbox() {
       DEFAULT_GEMINI_KEY
     )
   })
-  const [activeModel, setActiveModel] = useState<string>('gemini-3.7-flash')
+  const [activeModel, setActiveModel] = useState<string>('gemini-3.5-flash-lite')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -174,11 +174,15 @@ export function AIChatbox() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isOpen])
 
-  async function callGemini(text: string, keyToUse: string): Promise<string> {
+  async function streamGemini(
+    text: string,
+    keyToUse: string,
+    onChunk: (accumulated: string) => void
+  ): Promise<string> {
     const historyContents = [
       ...messages
-        .filter((m) => m.id !== 'welcome')
-        .slice(-8)
+        .filter((m) => m.id !== 'welcome' && m.content)
+        .slice(-4)
         .map((m) => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content }],
@@ -195,42 +199,77 @@ export function AIChatbox() {
       },
       contents: historyContents,
       generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 900,
+        temperature: 0.7,
+        maxOutputTokens: 450,
       },
     }
 
     let lastError = ''
 
-    // Sequential fallback across verified working models
     for (const model of CANDIDATE_MODELS) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 2800)
+
       try {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyToUse}`
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${keyToUse}`
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify(payload),
         })
+        clearTimeout(timeoutId)
 
-        if (res.ok) {
-          const data = await res.json()
-          const textOut = data?.candidates?.[0]?.content?.parts?.[0]?.text
-          if (textOut && textOut.trim()) {
-            setActiveModel(model)
-            return textOut.trim()
+        if (!res.ok) {
+          lastError = `HTTP ${res.status}`
+          continue
+        }
+
+        if (!res.body) {
+          continue
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let streamBuffer = ''
+        let accumulated = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          streamBuffer += decoder.decode(value, { stream: true })
+          const lines = streamBuffer.split('\n')
+          streamBuffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const rawJson = line.slice(6).trim()
+              if (rawJson) {
+                try {
+                  const parsed = JSON.parse(rawJson)
+                  const chunk = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+                  if (chunk) {
+                    accumulated += chunk
+                    onChunk(accumulated)
+                  }
+                } catch {}
+              }
+            }
           }
-        } else {
-          const errData = await res.json().catch(() => ({}))
-          lastError = errData?.error?.message || `HTTP ${res.status}`
-          console.warn(`Model ${model} returned error (${res.status}), trying next candidate...`)
+        }
+
+        if (accumulated.trim()) {
+          setActiveModel(model)
+          return accumulated.trim()
         }
       } catch (err: any) {
-        lastError = err?.message || 'Network error'
-        console.warn(`Fetch failed on ${model}, trying next...`)
+        clearTimeout(timeoutId)
+        lastError = err?.message || 'Error'
       }
     }
 
-    throw new Error(lastError || 'All Gemini models busy')
+    throw new Error(lastError || 'All models busy')
   }
 
   async function handleSend(textToSend?: string) {
@@ -244,31 +283,32 @@ export function AIChatbox() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
 
-    setMessages((prev) => [...prev, userMsg])
+    const botMsgId = String(Date.now() + 1)
+    const initialBotMsg: Message = {
+      id: botMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }
+
+    setMessages((prev) => [...prev, userMsg, initialBotMsg])
     setInput('')
     setIsLoading(true)
 
     const effectiveKey = (apiKey || DEFAULT_GEMINI_KEY).trim()
 
     try {
-      const aiReply = await callGemini(text, effectiveKey)
-      const botMsg: Message = {
-        id: String(Date.now() + 1),
-        role: 'assistant',
-        content: aiReply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }
-      setMessages((prev) => [...prev, botMsg])
+      await streamGemini(text, effectiveKey, (accumulated) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === botMsgId ? { ...m, content: accumulated } : m))
+        )
+      })
     } catch (err: any) {
-      console.warn('Gemini live call error, using precision fallback:', err)
+      console.warn('Gemini stream failed, using instant fallback:', err)
       const fallbackReply = getOfflineResponse(text)
-      const botMsg: Message = {
-        id: String(Date.now() + 1),
-        role: 'assistant',
-        content: fallbackReply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }
-      setMessages((prev) => [...prev, botMsg])
+      setMessages((prev) =>
+        prev.map((m) => (m.id === botMsgId ? { ...m, content: fallbackReply } : m))
+      )
     } finally {
       setIsLoading(false)
     }
@@ -340,27 +380,22 @@ export function AIChatbox() {
                     <img src="/tictac-aniket-v2.jpg" alt="Aniket" />
                   </div>
                 )}
-                <div className="ai-message-bubble">
-                  <div className="ai-message-text" style={{ whiteSpace: 'pre-wrap' }}>
-                    {m.content}
+                {m.role === 'assistant' && !m.content ? (
+                  <div className="ai-message-bubble ai-typing-bubble">
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
                   </div>
-                  <span className="ai-message-time">{m.timestamp}</span>
-                </div>
+                ) : (
+                  <div className="ai-message-bubble">
+                    <div className="ai-message-text" style={{ whiteSpace: 'pre-wrap' }}>
+                      {m.content}
+                    </div>
+                    <span className="ai-message-time">{m.timestamp}</span>
+                  </div>
+                )}
               </div>
             ))}
-
-            {isLoading && (
-              <div className="ai-message-row bot-row">
-                <div className="bot-tiny-avatar">
-                  <img src="/tictac-aniket-v2.jpg" alt="Aniket" />
-                </div>
-                <div className="ai-message-bubble ai-typing-bubble">
-                  <span className="typing-dot" />
-                  <span className="typing-dot" />
-                  <span className="typing-dot" />
-                </div>
-              </div>
-            )}
             <div ref={messagesEndRef} />
           </div>
 
